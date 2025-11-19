@@ -68,7 +68,7 @@ const db = getFirestore(app);
 const appId = "meta-360-clinica";
 
 // SENHA DO MÉDICO
-const DOCTOR_PASSWORD = "meta";
+const DOCTOR_PASSWORD = "meta360";
 
 // --- Componentes Visuais ---
 
