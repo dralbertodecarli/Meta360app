@@ -68,7 +68,7 @@ const db = getFirestore(app);
 const appId = "meta-360-clinica";
 
 // SENHA DO MÉDICO
-const DOCTOR_PASSWORD = "meta"; // <--- Mude sua senha aqui
+const DOCTOR_PASSWORD = "meta";
 
 // --- Componentes Visuais ---
 
@@ -839,7 +839,8 @@ export default function App() {
   );
 }
 
-const NavBtn = ({ icon: Icon, label, active, onClick }) => (
+// --- Correção aplicada aqui: Adicionado o tipo ": any" para satisfazer o fiscal da Vercel ---
+const NavBtn = ({ icon: Icon, label, active, onClick }: any) => (
   <button
     onClick={onClick}
     className={`flex flex-col items-center p-2 ${
