@@ -37,6 +37,8 @@ import { initializeApp } from "firebase/app";
 import {
   getAuth,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
   signOut,
@@ -179,8 +181,19 @@ export default function App() {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  // 1. Monitorar Autenticação
+  // 1. Monitorar Autenticação e Resultado de Redirecionamento
   useEffect(() => {
+    // Verifica se o usuário voltou de um redirecionamento (Login no Celular)
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          setUser(result.user);
+        }
+      })
+      .catch((error) => {
+        console.error("Erro no redirecionamento:", error);
+      });
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthLoading(false);
@@ -319,11 +332,18 @@ export default function App() {
 
   const handleGoogleLogin = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      // Detecta se é celular (iPhone/Android) para usar Redirecionamento
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      if (isMobile) {
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        await signInWithPopup(auth, googleProvider);
+      }
     } catch (error) {
       console.error("Erro no login:", error);
       alert(
-        "Erro ao fazer login com Google. Verifique se o domínio está autorizado no Firebase."
+        "Erro ao fazer login. Tente abrir o link no navegador Chrome ou Safari."
       );
     }
   };
