@@ -474,7 +474,7 @@ export default function App() {
             Entrar com Google
           </button>
           <p className="text-xs text-slate-400 mt-6">
-            Acesso seguro e histórico salvo.
+            Entre em 1 clique e acompanhe sua evolução
           </p>
         </div>
         <button
