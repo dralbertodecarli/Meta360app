@@ -29,6 +29,8 @@ import {
   Users,
   ArrowLeft,
   Lock,
+  MessageCircle,
+  Send,
 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import {
@@ -48,6 +50,7 @@ import {
   orderBy,
   onSnapshot,
   serverTimestamp,
+  getDoc,
 } from "firebase/firestore";
 
 // --- SUAS CHAVES DO FIREBASE ---
@@ -68,7 +71,7 @@ const db = getFirestore(app);
 const appId = "meta-360-clinica";
 
 // SENHA DO MÉDICO
-const DOCTOR_PASSWORD = "meta360";
+const DOCTOR_PASSWORD = "meta";
 
 // --- Componentes Visuais ---
 
@@ -141,7 +144,7 @@ const InputField = ({
 // --- O Cérebro do Aplicativo ---
 
 export default function App() {
-  // --- MAGIA PARA ATIVAR O DESIGN (Tailwind) ---
+  // Ativa o Tailwind (Design)
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://cdn.tailwindcss.com";
@@ -157,6 +160,10 @@ export default function App() {
   const [logs, setLogs] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<any>(null);
+
+  // Estado para o recado do médico
+  const [doctorNote, setDoctorNote] = useState("");
+  const [currentPatientData, setCurrentPatientData] = useState<any>(null);
 
   const [selectedMetric, setSelectedMetric] = useState("weight");
   const [aiAnalysis, setAiAnalysis] = useState("");
@@ -186,13 +193,14 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Carregar dados
+  // 2. Carregar dados (Logs)
   useEffect(() => {
     if (!user || mode === "doctor") {
       if (mode === "patient") setLoading(false);
       return;
     }
 
+    // Busca logs
     const q = query(
       collection(db, "artifacts", appId, "users", user.uid, "weekly_logs"),
       orderBy("createdAt", "desc")
@@ -220,7 +228,20 @@ export default function App() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    // Busca dados públicos do paciente (para ver o recado do médico)
+    const unsubPatient = onSnapshot(
+      doc(db, "artifacts", appId, "public", "data", "patients", user.uid),
+      (doc) => {
+        if (doc.exists()) {
+          setCurrentPatientData(doc.data());
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe();
+      unsubPatient();
+    };
   }, [user, appId, mode]);
 
   // 3. Carregar lista de pacientes (Médico)
@@ -242,7 +263,7 @@ export default function App() {
     return () => unsubscribe();
   }, [user, appId, mode, view]);
 
-  // 4. Detalhes do Paciente (Médico)
+  // 4. Detalhes do Paciente (Médico) - Carrega logs E o recado atual
   useEffect(() => {
     if (
       !user ||
@@ -253,6 +274,8 @@ export default function App() {
       return;
 
     setLoading(true);
+
+    // Logs
     const q = query(
       collection(
         db,
@@ -278,7 +301,30 @@ export default function App() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    // Recado Atual
+    const unsubPatient = onSnapshot(
+      doc(
+        db,
+        "artifacts",
+        appId,
+        "public",
+        "data",
+        "patients",
+        selectedPatientId
+      ),
+      (doc) => {
+        if (doc.exists()) {
+          const data = doc.data();
+          setCurrentPatientData(data);
+          if (data.doctorFeedback) setDoctorNote(data.doctorFeedback);
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe();
+      unsubPatient();
+    };
   }, [user, appId, mode, view, selectedPatientId]);
 
   // --- Ações ---
@@ -290,6 +336,33 @@ export default function App() {
       setView("patient_list");
     } else {
       alert("Senha incorreta.");
+    }
+  };
+
+  // Salvar Recado do Médico
+  const handleSaveFeedback = async () => {
+    if (!selectedPatientId) return;
+    try {
+      await setDoc(
+        doc(
+          db,
+          "artifacts",
+          appId,
+          "public",
+          "data",
+          "patients",
+          selectedPatientId
+        ),
+        {
+          doctorFeedback: doctorNote,
+          feedbackDate: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      alert("Feedback enviado para o paciente!");
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao enviar feedback.");
     }
   };
 
@@ -511,15 +584,40 @@ export default function App() {
         {(view === "dashboard" || view === "patient_detail") && (
           <div className="space-y-6">
             {mode === "doctor" && (
-              <button
-                onClick={() => {
-                  setView("patient_list");
-                  setSelectedPatientId(null);
-                }}
-                className="flex items-center text-sm text-slate-500 hover:text-emerald-600 mb-4"
-              >
-                <ArrowLeft className="w-4 h-4 mr-1" /> Voltar para lista
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    setView("patient_list");
+                    setSelectedPatientId(null);
+                  }}
+                  className="flex items-center text-sm text-slate-500 hover:text-emerald-600 mb-4"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-1" /> Voltar para lista
+                </button>
+
+                {/* CARTÃO DE FEEDBACK MÉDICO (APENAS PARA O DOUTOR ESCREVER) */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100">
+                  <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
+                    <MessageCircle className="w-5 h-5 text-emerald-600" />
+                    Seu Feedback para {currentPatientData?.name || "o Paciente"}
+                  </h3>
+                  <textarea
+                    className="w-full p-3 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    rows={3}
+                    placeholder="Escreva um recado para o paciente ver no app dele..."
+                    value={doctorNote}
+                    onChange={(e) => setDoctorNote(e.target.value)}
+                  />
+                  <div className="flex justify-end mt-3">
+                    <button
+                      onClick={handleSaveFeedback}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                    >
+                      <Send className="w-4 h-4" /> Enviar Mensagem
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
 
             {logs.length === 0 ? (
@@ -548,6 +646,76 @@ export default function App() {
               </div>
             ) : (
               <>
+                {/* ÁREA DE AVISOS PARA O PACIENTE */}
+                {mode === "patient" && currentPatientData?.doctorFeedback && (
+                  <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="bg-blue-600 p-2 rounded-full text-white mt-1">
+                        <MessageCircle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-blue-900 text-sm uppercase tracking-wide mb-1">
+                          Mensagem do Dr. Alberto
+                        </h3>
+                        <p className="text-blue-800 leading-relaxed">
+                          {currentPatientData.doctorFeedback}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* AI Analysis */}
+                <div
+                  className={`rounded-2xl p-6 text-white shadow-lg relative overflow-hidden ${
+                    mode === "doctor"
+                      ? "bg-gradient-to-br from-emerald-600 to-teal-700"
+                      : "bg-gradient-to-br from-indigo-600 to-violet-700"
+                  }`}
+                >
+                  <div className="relative z-10">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-yellow-300" />
+                        <h3 className="font-bold text-lg">
+                          {mode === "doctor"
+                            ? "Análise Automática (IA)"
+                            : "Análise Inteligente"}
+                        </h3>
+                      </div>
+                      {!aiAnalysis && !analyzing && (
+                        <button
+                          onClick={handleGeminiAnalysis}
+                          className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-sm font-medium rounded-lg backdrop-blur-sm flex items-center gap-2"
+                        >
+                          <Brain className="w-4 h-4" />
+                          {mode === "doctor"
+                            ? "Gerar Feedback"
+                            : "Gerar Análise"}
+                        </button>
+                      )}
+                    </div>
+
+                    {analyzing ? (
+                      <div className="animate-pulse text-sm font-medium opacity-90">
+                        Processando dados do paciente...
+                      </div>
+                    ) : aiAnalysis ? (
+                      <div className="animate-fadeIn">
+                        <p className="leading-relaxed text-sm md:text-base opacity-95">
+                          {aiAnalysis}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="opacity-80 text-sm">
+                        {mode === "doctor"
+                          ? "Gere uma análise automática para ajudar no seu diagnóstico."
+                          : 'Clique em "Gerar Análise" para receber um feedback do Dr. Alberto.'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
                 {/* Cartões de Métricas */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <MetricCard
@@ -839,7 +1007,6 @@ export default function App() {
   );
 }
 
-// --- Correção aplicada aqui: Adicionado o tipo ": any" para satisfazer o fiscal da Vercel ---
 const NavBtn = ({ icon: Icon, label, active, onClick }: any) => (
   <button
     onClick={onClick}
