@@ -533,6 +533,17 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* BOTÃO ÁREA MÉDICA RESTAURADO AQUI */}
+            {mode === "patient" && (
+              <button
+                onClick={handleDoctorLogin}
+                className="text-xs font-medium text-slate-400 hover:text-blue-600 px-3 py-1 rounded-full hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-100 flex items-center gap-1"
+              >
+                <Lock className="w-3 h-3" />{" "}
+                <span className="hidden sm:inline">Área Médica</span>
+              </button>
+            )}
+
             <button
               onClick={handleLogout}
               className="text-xs font-medium text-slate-400 hover:text-red-600 px-3 py-1 rounded-full hover:bg-red-50 transition-colors border border-transparent hover:border-red-100 flex items-center gap-1"
@@ -576,7 +587,7 @@ export default function App() {
                           {p.name || "Paciente sem nome"}
                         </h3>
                         <p className="text-xs text-slate-500">
-                          Último: {p.lastUpdateFormatted}
+                          Último registro: {p.lastUpdateFormatted}
                         </p>
                       </div>
                     </div>
