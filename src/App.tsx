@@ -241,7 +241,15 @@ export default function App() {
       doc(db, "artifacts", appId, "public", "data", "patients", user.uid),
       (doc) => {
         if (doc.exists()) {
-          setCurrentPatientData(doc.data());
+          const data = doc.data();
+          setCurrentPatientData(data);
+          // Carrega metas para o paciente ver
+          setMedicalPlan({
+            diagnosis: data.diagnosis || "",
+            targetWeight: data.targetWeight || "",
+            targetBodyFat: data.targetBodyFat || "",
+            otherGoals: data.otherGoals || "",
+          });
         }
       }
     );
@@ -332,6 +340,15 @@ export default function App() {
             targetBodyFat: data.targetBodyFat || "",
             otherGoals: data.otherGoals || "",
           });
+        } else {
+          // Reset se não existir
+          setMedicalPlan({
+            diagnosis: "",
+            targetWeight: "",
+            targetBodyFat: "",
+            otherGoals: "",
+          });
+          setDoctorNote("");
         }
       }
     );
@@ -624,8 +641,37 @@ export default function App() {
                     </div>
                     <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-emerald-500" />
                   </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                    <div className="bg-slate-50 rounded-lg p-2">
+                      <p className="text-slate-400 text-xs">Peso</p>
+                      <p className="font-semibold text-slate-700">
+                        {p.lastWeight || "-"}kg
+                      </p>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg p-2">
+                      <p className="text-slate-400 text-xs">Sono</p>
+                      <p className="font-semibold text-slate-700">
+                        {p.lastSleep || "-"}
+                      </p>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg p-2">
+                      <p className="text-slate-400 text-xs">IMC</p>
+                      <p className="font-semibold text-slate-700">
+                        {p.lastWeight && p.height
+                          ? (p.lastWeight / (p.height / 100) ** 2).toFixed(1)
+                          : "-"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               ))}
+              {patients.length === 0 && (
+                <div className="col-span-full text-center py-12 text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
+                  <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                  <p>Nenhum paciente registrou dados ainda.</p>
+                </div>
+              )}
             </div>
           </div>
         )}
