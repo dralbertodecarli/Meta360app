@@ -36,6 +36,7 @@ import {
   FileText,
   Percent,
   ClipboardList,
+  RefreshCw,
 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import {
@@ -46,6 +47,8 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   signOut,
+  browserLocalPersistence,
+  setPersistence,
 } from "firebase/auth";
 import {
   getFirestore,
@@ -194,11 +197,18 @@ export default function App() {
 
   // 1. Monitorar Autenticação
   useEffect(() => {
+    // Tenta recuperar resultado de redirecionamento (Login Mobile)
     getRedirectResult(auth)
       .then((result) => {
-        if (result) setUser(result.user);
+        if (result) {
+          console.log("Login bem sucedido via Redirect");
+          setUser(result.user);
+        }
       })
-      .catch((error) => console.error(error));
+      .catch((error) => {
+        console.error("Erro no redirecionamento:", error);
+        // Se der erro no redirect, não faz nada, o usuário tenta de novo
+      });
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -243,7 +253,6 @@ export default function App() {
       (doc) => {
         if (doc.exists()) {
           setCurrentPatientData(doc.data());
-          // Carrega metas para o paciente ver
           const d = doc.data();
           setMedicalPlan({
             diagnosis: d.diagnosis || "",
@@ -362,17 +371,30 @@ export default function App() {
 
   const handleGoogleLogin = async () => {
     try {
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      if (isMobile) {
-        await signInWithRedirect(auth, googleProvider);
-      } else {
+      // Força persistência local para evitar perder o login ao fechar aba
+      await setPersistence(auth, browserLocalPersistence);
+
+      // Tenta Popup primeiro (melhor UX), se falhar (navegadores mobile in-app), usa Redirect
+      try {
         await signInWithPopup(auth, googleProvider);
+      } catch (popupError: any) {
+        console.log(
+          "Popup bloqueado ou falhou, tentando Redirect...",
+          popupError
+        );
+        if (
+          popupError.code === "auth/popup-blocked" ||
+          popupError.code === "auth/cancelled-popup-request" ||
+          /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+        ) {
+          await signInWithRedirect(auth, googleProvider);
+        } else {
+          alert("Erro no login: " + popupError.message);
+        }
       }
     } catch (error) {
-      console.error("Erro no login:", error);
-      alert(
-        "Erro ao fazer login. Tente abrir o link no navegador Chrome ou Safari."
-      );
+      console.error("Erro geral no login:", error);
+      alert("Erro ao iniciar login.");
     }
   };
 
@@ -380,6 +402,8 @@ export default function App() {
     signOut(auth);
     setMode("patient");
     setView("dashboard");
+    // Força recarregar a página para limpar qualquer estado preso
+    window.location.reload();
   };
 
   const handleDoctorLogin = () => {
@@ -509,6 +533,15 @@ export default function App() {
           <p className="text-xs text-slate-400 mt-6">
             Entre em 1 clique e acompanhe sua evolução
           </p>
+
+          {/* Aviso para usuários de iPhone/WhatsApp */}
+          <div className="mt-8 p-3 bg-yellow-50 rounded-lg border border-yellow-100 text-left">
+            <p className="text-[10px] text-yellow-800 font-medium leading-tight">
+              ⚠️ <strong>Dica:</strong> Se estiver no WhatsApp ou Instagram e o
+              login falhar, clique nos 3 pontinhos e escolha{" "}
+              <strong>"Abrir no Navegador"</strong> (Chrome ou Safari).
+            </p>
+          </div>
         </div>
         <button
           onClick={handleDoctorLogin}
