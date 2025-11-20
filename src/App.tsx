@@ -1092,7 +1092,7 @@ export default function App() {
       {user && (
         <nav
           className={`fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 pb-safe pt-2 px-6 flex justify-around md:justify-center md:gap-12 z-20 ${
-            mode === "doctor" ? "border-t-indigo-200 bg-indigo-50/50" : ""
+            mode === "doctor" ? "border-t-emerald-200 bg-emerald-50/50" : ""
           }`}
         >
           {mode === "patient" ? (
@@ -1119,7 +1119,7 @@ export default function App() {
               />
             </>
           ) : (
-            <p className="text-xs text-indigo-600 font-medium py-3">
+            <p className="text-xs text-emerald-600 font-medium py-3">
               Modo Médico Ativo
             </p>
           )}
