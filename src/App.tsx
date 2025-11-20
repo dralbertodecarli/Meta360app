@@ -35,6 +35,7 @@ import {
   Target,
   FileText,
   Percent,
+  ClipboardList,
 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import {
@@ -241,14 +242,14 @@ export default function App() {
       doc(db, "artifacts", appId, "public", "data", "patients", user.uid),
       (doc) => {
         if (doc.exists()) {
-          const data = doc.data();
-          setCurrentPatientData(data);
+          setCurrentPatientData(doc.data());
           // Carrega metas para o paciente ver
+          const d = doc.data();
           setMedicalPlan({
-            diagnosis: data.diagnosis || "",
-            targetWeight: data.targetWeight || "",
-            targetBodyFat: data.targetBodyFat || "",
-            otherGoals: data.otherGoals || "",
+            diagnosis: d.diagnosis || "",
+            targetWeight: d.targetWeight || "",
+            targetBodyFat: d.targetBodyFat || "",
+            otherGoals: d.otherGoals || "",
           });
         }
       }
@@ -333,7 +334,6 @@ export default function App() {
           setCurrentPatientData(data);
           if (data.doctorFeedback) setDoctorNote(data.doctorFeedback);
 
-          // Carrega o plano médico se existir
           setMedicalPlan({
             diagnosis: data.diagnosis || "",
             targetWeight: data.targetWeight || "",
@@ -341,7 +341,6 @@ export default function App() {
             otherGoals: data.otherGoals || "",
           });
         } else {
-          // Reset se não existir
           setMedicalPlan({
             diagnosis: "",
             targetWeight: "",
@@ -480,7 +479,6 @@ export default function App() {
   // --- Helpers ---
   const chartData = useMemo(() => [...logs].reverse(), [logs]);
   const latestLog: any = logs[0] || {};
-  const previousLog: any = logs[1] || {};
 
   // --- Interface ---
 
@@ -505,24 +503,7 @@ export default function App() {
             onClick={handleGoogleLogin}
             className="w-full py-4 bg-white border-2 border-slate-100 hover:border-blue-500 hover:bg-blue-50 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm"
           >
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                fill="#4285F4"
-              />
-              <path
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                fill="#34A853"
-              />
-              <path
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                fill="#FBBC05"
-              />
-              <path
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                fill="#EA4335"
-              />
-            </svg>
+            <span className="text-lg font-bold">G</span>
             Entrar com Google
           </button>
           <p className="text-xs text-slate-400 mt-6">
@@ -543,7 +524,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 md:pb-0">
       <header
         className={`bg-white border-b border-slate-200 sticky top-0 z-20 ${
-          mode === "doctor" ? "border-b-4 border-b-emerald-500" : ""
+          mode === "doctor" ? "border-b-4 border-b-indigo-500" : ""
         }`}
       >
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -560,7 +541,7 @@ export default function App() {
           >
             <div
               className={`${
-                mode === "doctor" ? "bg-emerald-600" : "bg-blue-600"
+                mode === "doctor" ? "bg-indigo-600" : "bg-blue-600"
               } p-2 rounded-lg transition-colors`}
             >
               {mode === "doctor" ? (
@@ -575,7 +556,7 @@ export default function App() {
               </h1>
               <p
                 className={`text-xs font-medium uppercase tracking-wider ${
-                  mode === "doctor" ? "text-emerald-600" : "text-blue-600"
+                  mode === "doctor" ? "text-indigo-600" : "text-blue-600"
                 }`}
               >
                 {mode === "doctor" ? "Área Médica" : "by Dr. Alberto De Carli"}
@@ -587,7 +568,7 @@ export default function App() {
             {mode === "patient" && (
               <button
                 onClick={handleDoctorLogin}
-                className="text-xs font-medium text-slate-400 hover:text-blue-600 px-3 py-1 rounded-full hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-100 flex items-center gap-1"
+                className="text-xs font-medium text-indigo-500 hover:text-indigo-700 px-3 py-1 rounded-full hover:bg-indigo-50 transition-colors border border-transparent hover:border-indigo-100 flex items-center gap-1"
               >
                 <Lock className="w-3 h-3" />{" "}
                 <span className="hidden sm:inline">Área Médica</span>
@@ -623,15 +604,15 @@ export default function App() {
                     setSelectedPatientId(p.uid);
                     setView("patient_detail");
                   }}
-                  className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer group"
+                  className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer group"
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold">
+                      <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold">
                         {p.name ? p.name.charAt(0).toUpperCase() : "P"}
                       </div>
                       <div>
-                        <h3 className="font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
+                        <h3 className="font-bold text-slate-800 group-hover:text-indigo-700 transition-colors">
                           {p.name || "Paciente sem nome"}
                         </h3>
                         <p className="text-xs text-slate-500">
@@ -639,7 +620,7 @@ export default function App() {
                         </p>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-emerald-500" />
+                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500" />
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 text-center text-sm">
@@ -666,12 +647,6 @@ export default function App() {
                   </div>
                 </div>
               ))}
-              {patients.length === 0 && (
-                <div className="col-span-full text-center py-12 text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
-                  <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                  <p>Nenhum paciente registrou dados ainda.</p>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -686,27 +661,28 @@ export default function App() {
                     setView("patient_list");
                     setSelectedPatientId(null);
                   }}
-                  className="flex items-center text-sm text-slate-500 hover:text-emerald-600 mb-4"
+                  className="flex items-center text-sm text-slate-500 hover:text-indigo-600 mb-4"
                 >
                   <ArrowLeft className="w-4 h-4 mr-1" /> Voltar para lista
                 </button>
 
-                {/* ÁREA DO MÉDICO: PLANEJAMENTO E FEEDBACK */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100">
-                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                    <Stethoscope className="w-5 h-5 text-emerald-600" />
-                    Planejamento Clínico & Feedback
+                {/* ÁREA DO MÉDICO: PLANEJAMENTO CLÍNICO */}
+                <div className="bg-white p-6 rounded-2xl shadow-md border-l-4 border-indigo-500">
+                  <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-2">
+                    <ClipboardList className="w-6 h-6 text-indigo-600" />
+                    Planejamento Clínico
                   </h3>
 
-                  <div className="space-y-4">
+                  <div className="space-y-5">
                     {/* Diagnóstico */}
                     <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 block">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">
                         Diagnóstico
                       </label>
-                      <input
-                        className="w-full p-3 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                        placeholder="Ex: Obesidade Grau 1, Dislipidemia..."
+                      <textarea
+                        className="w-full p-3 border border-slate-200 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        rows={2}
+                        placeholder="Ex: Obesidade Grau 1 com resistência à insulina..."
                         value={medicalPlan.diagnosis}
                         onChange={(e) =>
                           setMedicalPlan({
@@ -719,50 +695,56 @@ export default function App() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 block">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">
                           Meta de Peso (kg)
                         </label>
-                        <input
-                          type="number"
-                          className="w-full p-3 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                          placeholder="Ex: 70"
-                          value={medicalPlan.targetWeight}
-                          onChange={(e) =>
-                            setMedicalPlan({
-                              ...medicalPlan,
-                              targetWeight: e.target.value,
-                            })
-                          }
-                        />
+                        <div className="relative">
+                          <input
+                            type="number"
+                            className="w-full p-3 pl-10 border border-slate-200 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                            placeholder="70"
+                            value={medicalPlan.targetWeight}
+                            onChange={(e) =>
+                              setMedicalPlan({
+                                ...medicalPlan,
+                                targetWeight: e.target.value,
+                              })
+                            }
+                          />
+                          <Target className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+                        </div>
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 block">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">
                           Meta Gordura (%)
                         </label>
-                        <input
-                          type="number"
-                          className="w-full p-3 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                          placeholder="Ex: 15"
-                          value={medicalPlan.targetBodyFat}
-                          onChange={(e) =>
-                            setMedicalPlan({
-                              ...medicalPlan,
-                              targetBodyFat: e.target.value,
-                            })
-                          }
-                        />
+                        <div className="relative">
+                          <input
+                            type="number"
+                            className="w-full p-3 pl-10 border border-slate-200 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                            placeholder="15"
+                            value={medicalPlan.targetBodyFat}
+                            onChange={(e) =>
+                              setMedicalPlan({
+                                ...medicalPlan,
+                                targetBodyFat: e.target.value,
+                              })
+                            }
+                          />
+                          <Percent className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+                        </div>
                       </div>
                     </div>
 
                     {/* Outros Objetivos */}
                     <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 block">
-                        Outros Objetivos
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">
+                        Outros Objetivos / Observações
                       </label>
                       <textarea
-                        className="w-full p-3 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                        className="w-full p-3 border border-slate-200 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                         rows={2}
-                        placeholder="Ex: Melhorar qualidade do sono, aumentar ingestão de água..."
+                        placeholder="Ex: Beber 3L de água, dormir antes das 23h..."
                         value={medicalPlan.otherGoals}
                         onChange={(e) =>
                           setMedicalPlan({
@@ -774,28 +756,33 @@ export default function App() {
                     </div>
 
                     <div className="border-t border-slate-100 pt-4">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 block">
-                        Seu Recado (Chat)
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">
+                        Recado para o Paciente (Chat)
                       </label>
-                      <textarea
-                        className="w-full p-3 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                        rows={2}
-                        placeholder="Mensagem direta para o paciente..."
-                        value={doctorNote}
-                        onChange={(e) => setDoctorNote(e.target.value)}
-                      />
+                      <div className="relative">
+                        <textarea
+                          className="w-full p-3 pl-10 border border-slate-200 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                          rows={2}
+                          placeholder="Escreva um feedback direto..."
+                          value={doctorNote}
+                          onChange={(e) => setDoctorNote(e.target.value)}
+                        />
+                        <MessageCircle className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex justify-end mt-4">
+                  <div className="flex justify-end mt-6">
                     <button
                       onClick={handleSaveFeedbackAndPlan}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-emerald-200 shadow-lg"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-indigo-200"
                     >
                       <Save className="w-4 h-4" /> Salvar Planejamento
                     </button>
                   </div>
                 </div>
+
+                <div className="my-6 border-t border-slate-200"></div>
               </>
             )}
 
@@ -815,56 +802,62 @@ export default function App() {
               <>
                 {/* ÁREA DE AVISOS E METAS PARA O PACIENTE */}
                 {mode === "patient" && currentPatientData && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     {/* Cartão de Metas */}
                     {(currentPatientData.diagnosis ||
-                      currentPatientData.targetWeight) && (
-                      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                          <Target className="w-5 h-5 text-blue-600" /> Minhas
+                      currentPatientData.targetWeight ||
+                      currentPatientData.targetBodyFat) && (
+                      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-50 rounded-bl-full -mr-4 -mt-4"></div>
+                        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 relative z-10">
+                          <Target className="w-5 h-5 text-indigo-600" /> Minhas
                           Metas
                         </h3>
-                        <div className="space-y-3">
+                        <div className="space-y-4 relative z-10">
                           {currentPatientData.diagnosis && (
-                            <div className="bg-slate-50 p-3 rounded-lg">
-                              <span className="text-xs font-bold text-slate-400 uppercase block">
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                                 Diagnóstico
                               </span>
-                              <span className="text-slate-800 font-medium">
+                              <p className="text-slate-800 font-medium leading-snug">
                                 {currentPatientData.diagnosis}
-                              </span>
+                              </p>
                             </div>
                           )}
-                          <div className="flex gap-3">
+                          <div className="flex gap-4">
                             {currentPatientData.targetWeight && (
-                              <div className="bg-blue-50 p-3 rounded-lg flex-1">
-                                <span className="text-xs font-bold text-blue-400 uppercase block">
+                              <div className="flex-1">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                                   Meta Peso
                                 </span>
-                                <span className="text-blue-800 font-bold text-lg">
-                                  {currentPatientData.targetWeight} kg
-                                </span>
+                                <p className="text-indigo-600 font-bold text-xl">
+                                  {currentPatientData.targetWeight}{" "}
+                                  <span className="text-sm font-normal text-slate-500">
+                                    kg
+                                  </span>
+                                </p>
                               </div>
                             )}
                             {currentPatientData.targetBodyFat && (
-                              <div className="bg-purple-50 p-3 rounded-lg flex-1">
-                                <span className="text-xs font-bold text-purple-400 uppercase block">
+                              <div className="flex-1">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                                   Meta Gordura
                                 </span>
-                                <span className="text-purple-800 font-bold text-lg">
-                                  {currentPatientData.targetBodyFat}%
-                                </span>
+                                <p className="text-purple-600 font-bold text-xl">
+                                  {currentPatientData.targetBodyFat}
+                                  <span className="text-sm">%</span>
+                                </p>
                               </div>
                             )}
                           </div>
                           {currentPatientData.otherGoals && (
-                            <div className="bg-slate-50 p-3 rounded-lg">
-                              <span className="text-xs font-bold text-slate-400 uppercase block">
-                                Objetivos
+                            <div className="pt-2 border-t border-slate-50">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                Outros Objetivos
                               </span>
-                              <span className="text-slate-600 text-sm">
+                              <p className="text-slate-600 text-sm mt-1">
                                 {currentPatientData.otherGoals}
-                              </span>
+                              </p>
                             </div>
                           )}
                         </div>
@@ -873,16 +866,16 @@ export default function App() {
 
                     {/* Cartão de Recado */}
                     {currentPatientData.doctorFeedback && (
-                      <div className="bg-blue-600 p-6 rounded-2xl border border-blue-500 shadow-lg text-white">
+                      <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-2xl shadow-lg text-white">
                         <div className="flex items-start gap-3">
-                          <div className="bg-white/20 p-2 rounded-full mt-1">
+                          <div className="bg-white/20 p-2 rounded-full mt-1 backdrop-blur-sm">
                             <MessageCircle className="w-5 h-5" />
                           </div>
                           <div>
-                            <h3 className="font-bold text-blue-100 text-sm uppercase tracking-wide mb-2">
+                            <h3 className="font-bold text-blue-100 text-xs uppercase tracking-wide mb-2">
                               Mensagem do Dr. Alberto
                             </h3>
-                            <p className="text-white leading-relaxed text-lg font-medium">
+                            <p className="text-white leading-relaxed text-md font-medium">
                               "{currentPatientData.doctorFeedback}"
                             </p>
                           </div>
@@ -1099,7 +1092,7 @@ export default function App() {
       {user && (
         <nav
           className={`fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 pb-safe pt-2 px-6 flex justify-around md:justify-center md:gap-12 z-20 ${
-            mode === "doctor" ? "border-t-emerald-200 bg-emerald-50/50" : ""
+            mode === "doctor" ? "border-t-indigo-200 bg-indigo-50/50" : ""
           }`}
         >
           {mode === "patient" ? (
@@ -1126,7 +1119,7 @@ export default function App() {
               />
             </>
           ) : (
-            <p className="text-xs text-emerald-600 font-medium py-3">
+            <p className="text-xs text-indigo-600 font-medium py-3">
               Modo Médico Ativo
             </p>
           )}
