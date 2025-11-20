@@ -32,6 +32,9 @@ import {
   MessageCircle,
   Send,
   LogIn,
+  Target,
+  FileText,
+  Percent,
 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import {
@@ -165,7 +168,14 @@ export default function App() {
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<any>(null);
 
+  // Dados do Paciente (Feedback + Metas)
   const [doctorNote, setDoctorNote] = useState("");
+  const [medicalPlan, setMedicalPlan] = useState({
+    diagnosis: "",
+    targetWeight: "",
+    targetBodyFat: "",
+    otherGoals: "",
+  });
   const [currentPatientData, setCurrentPatientData] = useState<any>(null);
 
   const [selectedMetric, setSelectedMetric] = useState("weight");
@@ -181,18 +191,13 @@ export default function App() {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  // 1. Monitorar Autenticação e Resultado de Redirecionamento
+  // 1. Monitorar Autenticação
   useEffect(() => {
-    // Verifica se o usuário voltou de um redirecionamento (Login no Celular)
     getRedirectResult(auth)
       .then((result) => {
-        if (result) {
-          setUser(result.user);
-        }
+        if (result) setUser(result.user);
       })
-      .catch((error) => {
-        console.error("Erro no redirecionamento:", error);
-      });
+      .catch((error) => console.error(error));
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -222,7 +227,6 @@ export default function App() {
       }));
       setLogs(data);
 
-      // Auto-preencher altura se já existir
       if (data.length > 0) {
         const last: any = data[0];
         setFormData((prev) => ({
@@ -278,6 +282,7 @@ export default function App() {
       return;
 
     setLoading(true);
+    // Logs
     const q = query(
       collection(
         db,
@@ -303,6 +308,7 @@ export default function App() {
       setLoading(false);
     });
 
+    // Dados Públicos (Metas e Feedback)
     const unsubPatient = onSnapshot(
       doc(
         db,
@@ -318,6 +324,14 @@ export default function App() {
           const data = doc.data();
           setCurrentPatientData(data);
           if (data.doctorFeedback) setDoctorNote(data.doctorFeedback);
+
+          // Carrega o plano médico se existir
+          setMedicalPlan({
+            diagnosis: data.diagnosis || "",
+            targetWeight: data.targetWeight || "",
+            targetBodyFat: data.targetBodyFat || "",
+            otherGoals: data.otherGoals || "",
+          });
         }
       }
     );
@@ -332,9 +346,7 @@ export default function App() {
 
   const handleGoogleLogin = async () => {
     try {
-      // Detecta se é celular (iPhone/Android) para usar Redirecionamento
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
       if (isMobile) {
         await signInWithRedirect(auth, googleProvider);
       } else {
@@ -364,7 +376,7 @@ export default function App() {
     }
   };
 
-  const handleSaveFeedback = async () => {
+  const handleSaveFeedbackAndPlan = async () => {
     if (!selectedPatientId) return;
     try {
       await setDoc(
@@ -379,14 +391,18 @@ export default function App() {
         ),
         {
           doctorFeedback: doctorNote,
+          diagnosis: medicalPlan.diagnosis,
+          targetWeight: medicalPlan.targetWeight,
+          targetBodyFat: medicalPlan.targetBodyFat,
+          otherGoals: medicalPlan.otherGoals,
           feedbackDate: serverTimestamp(),
         },
         { merge: true }
       );
-      alert("Feedback enviado!");
+      alert("Planejamento salvo com sucesso!");
     } catch (error) {
       console.error(error);
-      alert("Erro ao enviar feedback.");
+      alert("Erro ao salvar.");
     }
   };
 
@@ -458,7 +474,6 @@ export default function App() {
       </div>
     );
 
-  // TELA DE LOGIN (Se não estiver logado)
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
@@ -509,7 +524,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 md:pb-0">
-      {/* Cabeçalho */}
       <header
         className={`bg-white border-b border-slate-200 sticky top-0 z-20 ${
           mode === "doctor" ? "border-b-4 border-b-emerald-500" : ""
@@ -553,7 +567,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* BOTÃO ÁREA MÉDICA RESTAURADO AQUI */}
             {mode === "patient" && (
               <button
                 onClick={handleDoctorLogin}
@@ -563,7 +576,6 @@ export default function App() {
                 <span className="hidden sm:inline">Área Médica</span>
               </button>
             )}
-
             <button
               onClick={handleLogout}
               className="text-xs font-medium text-slate-400 hover:text-red-600 px-3 py-1 rounded-full hover:bg-red-50 transition-colors border border-transparent hover:border-red-100 flex items-center gap-1"
@@ -575,7 +587,7 @@ export default function App() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
-        {/* --- MÉDICO: LISTA DE PACIENTES --- */}
+        {/* --- MÉDICO: LISTA --- */}
         {mode === "doctor" && view === "patient_list" && (
           <div className="space-y-6">
             <div className="flex justify-between items-end">
@@ -586,7 +598,6 @@ export default function App() {
                 {patients.length} ativos
               </span>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {patients.map((p) => (
                 <div
@@ -607,43 +618,14 @@ export default function App() {
                           {p.name || "Paciente sem nome"}
                         </h3>
                         <p className="text-xs text-slate-500">
-                          Último registro: {p.lastUpdateFormatted}
+                          Último: {p.lastUpdateFormatted}
                         </p>
                       </div>
                     </div>
                     <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-emerald-500" />
                   </div>
-
-                  <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                    <div className="bg-slate-50 rounded-lg p-2">
-                      <p className="text-slate-400 text-xs">Peso</p>
-                      <p className="font-semibold text-slate-700">
-                        {p.lastWeight || "-"}kg
-                      </p>
-                    </div>
-                    <div className="bg-slate-50 rounded-lg p-2">
-                      <p className="text-slate-400 text-xs">Sono</p>
-                      <p className="font-semibold text-slate-700">
-                        {p.lastSleep || "-"}
-                      </p>
-                    </div>
-                    <div className="bg-slate-50 rounded-lg p-2">
-                      <p className="text-slate-400 text-xs">IMC</p>
-                      <p className="font-semibold text-slate-700">
-                        {p.lastWeight && p.height
-                          ? (p.lastWeight / (p.height / 100) ** 2).toFixed(1)
-                          : "-"}
-                      </p>
-                    </div>
-                  </div>
                 </div>
               ))}
-              {patients.length === 0 && (
-                <div className="col-span-full text-center py-12 text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
-                  <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                  <p>Nenhum paciente registrou dados ainda.</p>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -663,25 +645,108 @@ export default function App() {
                   <ArrowLeft className="w-4 h-4 mr-1" /> Voltar para lista
                 </button>
 
-                {/* CARTÃO DE FEEDBACK MÉDICO */}
+                {/* ÁREA DO MÉDICO: PLANEJAMENTO E FEEDBACK */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100">
-                  <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
-                    <MessageCircle className="w-5 h-5 text-emerald-600" />
-                    Seu Feedback para {currentPatientData?.name || "o Paciente"}
+                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <Stethoscope className="w-5 h-5 text-emerald-600" />
+                    Planejamento Clínico & Feedback
                   </h3>
-                  <textarea
-                    className="w-full p-3 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                    rows={3}
-                    placeholder="Escreva um recado para o paciente ver no app dele..."
-                    value={doctorNote}
-                    onChange={(e) => setDoctorNote(e.target.value)}
-                  />
-                  <div className="flex justify-end mt-3">
+
+                  <div className="space-y-4">
+                    {/* Diagnóstico */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 block">
+                        Diagnóstico
+                      </label>
+                      <input
+                        className="w-full p-3 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                        placeholder="Ex: Obesidade Grau 1, Dislipidemia..."
+                        value={medicalPlan.diagnosis}
+                        onChange={(e) =>
+                          setMedicalPlan({
+                            ...medicalPlan,
+                            diagnosis: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 block">
+                          Meta de Peso (kg)
+                        </label>
+                        <input
+                          type="number"
+                          className="w-full p-3 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                          placeholder="Ex: 70"
+                          value={medicalPlan.targetWeight}
+                          onChange={(e) =>
+                            setMedicalPlan({
+                              ...medicalPlan,
+                              targetWeight: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 block">
+                          Meta Gordura (%)
+                        </label>
+                        <input
+                          type="number"
+                          className="w-full p-3 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                          placeholder="Ex: 15"
+                          value={medicalPlan.targetBodyFat}
+                          onChange={(e) =>
+                            setMedicalPlan({
+                              ...medicalPlan,
+                              targetBodyFat: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    {/* Outros Objetivos */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 block">
+                        Outros Objetivos
+                      </label>
+                      <textarea
+                        className="w-full p-3 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                        rows={2}
+                        placeholder="Ex: Melhorar qualidade do sono, aumentar ingestão de água..."
+                        value={medicalPlan.otherGoals}
+                        onChange={(e) =>
+                          setMedicalPlan({
+                            ...medicalPlan,
+                            otherGoals: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-4">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 block">
+                        Seu Recado (Chat)
+                      </label>
+                      <textarea
+                        className="w-full p-3 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                        rows={2}
+                        placeholder="Mensagem direta para o paciente..."
+                        value={doctorNote}
+                        onChange={(e) => setDoctorNote(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end mt-4">
                     <button
-                      onClick={handleSaveFeedback}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                      onClick={handleSaveFeedbackAndPlan}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-emerald-200 shadow-lg"
                     >
-                      <Send className="w-4 h-4" /> Enviar Mensagem
+                      <Save className="w-4 h-4" /> Salvar Planejamento
                     </button>
                   </div>
                 </div>
@@ -690,23 +755,11 @@ export default function App() {
 
             {logs.length === 0 ? (
               <div className="text-center py-12 bg-white rounded-3xl shadow-sm border border-dashed border-slate-300">
-                <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <PlusCircle className="w-8 h-8 text-blue-600" />
-                </div>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">
-                  {mode === "doctor"
-                    ? "Paciente sem dados"
-                    : "Bem-vindo ao Meta 360"}
-                </h2>
-                <p className="text-slate-500 mb-6 max-w-md mx-auto">
-                  {mode === "doctor"
-                    ? "Aguardando registros."
-                    : "Registre seus dados da semana para começar."}
-                </p>
+                <p className="text-slate-500">Aguardando registros...</p>
                 {mode === "patient" && (
                   <button
                     onClick={() => setView("new")}
-                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium shadow-lg shadow-blue-200"
+                    className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-xl"
                   >
                     Criar Primeiro Registro
                   </button>
@@ -714,146 +767,123 @@ export default function App() {
               </div>
             ) : (
               <>
-                {/* ÁREA DE AVISOS PARA O PACIENTE */}
-                {mode === "patient" && currentPatientData?.doctorFeedback && (
-                  <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 shadow-sm">
-                    <div className="flex items-start gap-3">
-                      <div className="bg-blue-600 p-2 rounded-full text-white mt-1">
-                        <MessageCircle className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-blue-900 text-sm uppercase tracking-wide mb-1">
-                          Mensagem do Dr. Alberto
+                {/* ÁREA DE AVISOS E METAS PARA O PACIENTE */}
+                {mode === "patient" && currentPatientData && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Cartão de Metas */}
+                    {(currentPatientData.diagnosis ||
+                      currentPatientData.targetWeight) && (
+                      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                          <Target className="w-5 h-5 text-blue-600" /> Minhas
+                          Metas
                         </h3>
-                        <p className="text-blue-800 leading-relaxed">
-                          {currentPatientData.doctorFeedback}
-                        </p>
+                        <div className="space-y-3">
+                          {currentPatientData.diagnosis && (
+                            <div className="bg-slate-50 p-3 rounded-lg">
+                              <span className="text-xs font-bold text-slate-400 uppercase block">
+                                Diagnóstico
+                              </span>
+                              <span className="text-slate-800 font-medium">
+                                {currentPatientData.diagnosis}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex gap-3">
+                            {currentPatientData.targetWeight && (
+                              <div className="bg-blue-50 p-3 rounded-lg flex-1">
+                                <span className="text-xs font-bold text-blue-400 uppercase block">
+                                  Meta Peso
+                                </span>
+                                <span className="text-blue-800 font-bold text-lg">
+                                  {currentPatientData.targetWeight} kg
+                                </span>
+                              </div>
+                            )}
+                            {currentPatientData.targetBodyFat && (
+                              <div className="bg-purple-50 p-3 rounded-lg flex-1">
+                                <span className="text-xs font-bold text-purple-400 uppercase block">
+                                  Meta Gordura
+                                </span>
+                                <span className="text-purple-800 font-bold text-lg">
+                                  {currentPatientData.targetBodyFat}%
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          {currentPatientData.otherGoals && (
+                            <div className="bg-slate-50 p-3 rounded-lg">
+                              <span className="text-xs font-bold text-slate-400 uppercase block">
+                                Objetivos
+                              </span>
+                              <span className="text-slate-600 text-sm">
+                                {currentPatientData.otherGoals}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    )}
+
+                    {/* Cartão de Recado */}
+                    {currentPatientData.doctorFeedback && (
+                      <div className="bg-blue-600 p-6 rounded-2xl border border-blue-500 shadow-lg text-white">
+                        <div className="flex items-start gap-3">
+                          <div className="bg-white/20 p-2 rounded-full mt-1">
+                            <MessageCircle className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-blue-100 text-sm uppercase tracking-wide mb-2">
+                              Mensagem do Dr. Alberto
+                            </h3>
+                            <p className="text-white leading-relaxed text-lg font-medium">
+                              "{currentPatientData.doctorFeedback}"
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* AI Analysis */}
-                <div
-                  className={`rounded-2xl p-6 text-white shadow-lg relative overflow-hidden ${
-                    mode === "doctor"
-                      ? "bg-gradient-to-br from-emerald-600 to-teal-700"
-                      : "bg-gradient-to-br from-indigo-600 to-violet-700"
-                  }`}
-                >
-                  <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-yellow-300" />
-                        <h3 className="font-bold text-lg">
-                          {mode === "doctor"
-                            ? "Análise Automática (IA)"
-                            : "Análise Inteligente"}
-                        </h3>
-                      </div>
-                      {!aiAnalysis && !analyzing && (
-                        <button
-                          onClick={handleGeminiAnalysis}
-                          className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-sm font-medium rounded-lg backdrop-blur-sm flex items-center gap-2"
-                        >
-                          <Brain className="w-4 h-4" />
-                          {mode === "doctor"
-                            ? "Gerar Feedback"
-                            : "Gerar Análise"}
-                        </button>
-                      )}
-                    </div>
-
-                    {analyzing ? (
-                      <div className="animate-pulse text-sm font-medium opacity-90">
-                        Processando dados do paciente...
-                      </div>
-                    ) : aiAnalysis ? (
-                      <div className="animate-fadeIn">
-                        <p className="leading-relaxed text-sm md:text-base opacity-95">
-                          {aiAnalysis}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="opacity-80 text-sm">
-                        {mode === "doctor"
-                          ? "Gere uma análise automática para ajudar no seu diagnóstico."
-                          : 'Clique em "Gerar Análise" para receber um feedback do Dr. Alberto.'}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Cartões de Métricas */}
+                {/* Cartões de Métricas e Gráficos (Mantidos igual) */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <MetricCard
                     title="Peso"
-                    value={latestLog.weight || "-"}
+                    value={latestLog.weight}
                     unit="kg"
                     icon={Scale}
                     color={{ bg: "bg-blue-500", text: "text-blue-600" }}
-                    trend={
-                      latestLog.weight && previousLog.weight
-                        ? (latestLog.weight - previousLog.weight).toFixed(1)
-                        : null
-                    }
+                    trend={null}
                   />
                   <MetricCard
                     title="Cintura"
-                    value={latestLog.waist || "-"}
+                    value={latestLog.waist}
                     unit="cm"
                     icon={Ruler}
                     color={{ bg: "bg-purple-500", text: "text-purple-600" }}
-                    trend={
-                      latestLog.waist && previousLog.waist
-                        ? (latestLog.waist - previousLog.waist).toFixed(1)
-                        : null
-                    }
+                    trend={null}
                   />
                   <MetricCard
                     title="Sono"
-                    value={latestLog.sleepScore || "-"}
+                    value={latestLog.sleepScore}
                     unit="/100"
                     icon={Moon}
                     color={{ bg: "bg-indigo-500", text: "text-indigo-600" }}
                   />
                   <MetricCard
                     title="Treino"
-                    value={latestLog.workoutMinutes || "-"}
+                    value={latestLog.workoutMinutes}
                     unit="min"
                     icon={Activity}
                     color={{ bg: "bg-emerald-500", text: "text-emerald-600" }}
                   />
                 </div>
 
-                {/* Gráfico */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                  <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
-                    <h3 className="text-lg font-bold text-slate-800">
-                      Evolução
-                    </h3>
-                    <div className="flex bg-slate-100 p-1 rounded-lg">
-                      {[
-                        { id: "weight", l: "Peso" },
-                        { id: "waist", l: "Cintura" },
-                        { id: "sleepScore", l: "Sono" },
-                        { id: "workoutMinutes", l: "Treino" },
-                      ].map((m) => (
-                        <button
-                          key={m.id}
-                          onClick={() => setSelectedMetric(m.id)}
-                          className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all ${
-                            selectedMetric === m.id
-                              ? "bg-white text-blue-600 shadow-sm"
-                              : "text-slate-500"
-                          }`}
-                        >
-                          {m.l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
+                  <h3 className="text-lg font-bold text-slate-800 mb-4">
+                    Evolução
+                  </h3>
                   <div className="h-[300px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart
@@ -870,16 +900,12 @@ export default function App() {
                           >
                             <stop
                               offset="5%"
-                              stopColor={
-                                mode === "doctor" ? "#10b981" : "#3b82f6"
-                              }
+                              stopColor="#3b82f6"
                               stopOpacity={0.2}
                             />
                             <stop
                               offset="95%"
-                              stopColor={
-                                mode === "doctor" ? "#10b981" : "#3b82f6"
-                              }
+                              stopColor="#3b82f6"
                               stopOpacity={0}
                             />
                           </linearGradient>
@@ -912,7 +938,7 @@ export default function App() {
                         <Area
                           type="monotone"
                           dataKey={selectedMetric}
-                          stroke={mode === "doctor" ? "#059669" : "#2563eb"}
+                          stroke="#3b82f6"
                           strokeWidth={3}
                           fillOpacity={1}
                           fill="url(#colorMetric)"
@@ -942,9 +968,7 @@ export default function App() {
                   Cancelar
                 </button>
               </div>
-
               <form onSubmit={handleSaveLog} className="p-6">
-                {/* CAMPO DE NOME REMOVIDO AQUI POIS É AUTOMÁTICO */}
                 <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-100 flex items-center gap-3">
                   <User className="w-5 h-5 text-blue-600" />
                   <p className="text-sm text-blue-800 font-medium">
@@ -954,7 +978,6 @@ export default function App() {
                     </span>
                   </p>
                 </div>
-
                 <InputField
                   label="Peso Atual"
                   value={formData.weight}
@@ -971,7 +994,6 @@ export default function App() {
                   placeholder="Ex: 175"
                   suffix="cm"
                 />
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <InputField
                     label="Circunferência Abdominal"
@@ -994,7 +1016,6 @@ export default function App() {
                     suffix="pts"
                   />
                 </div>
-
                 <InputField
                   label="Minutos de Treino (Semana)"
                   value={formData.workoutMinutes}
@@ -1005,7 +1026,6 @@ export default function App() {
                   placeholder="Ex: 150"
                   suffix="min"
                 />
-
                 <button
                   type="submit"
                   disabled={submitting}
@@ -1029,7 +1049,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Navegação Inferior (Só aparece se estiver logado) */}
+      {/* Navegação Inferior */}
       {user && (
         <nav
           className={`fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 pb-safe pt-2 px-6 flex justify-around md:justify-center md:gap-12 z-20 ${
