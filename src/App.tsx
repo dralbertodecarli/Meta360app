@@ -171,7 +171,6 @@ export default function App() {
   const [analyzing, setAnalyzing] = useState(false);
 
   const [formData, setFormData] = useState({
-    name: "",
     weight: "",
     height: "",
     sleepScore: "",
@@ -210,12 +209,12 @@ export default function App() {
       }));
       setLogs(data);
 
+      // Auto-preencher altura se já existir
       if (data.length > 0) {
         const last: any = data[0];
         setFormData((prev) => ({
           ...prev,
           height: last.height || prev.height,
-          name: last.patientName || prev.name,
         }));
       }
       setLoading(false);
@@ -323,7 +322,9 @@ export default function App() {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
       console.error("Erro no login:", error);
-      alert("Erro ao fazer login com Google.");
+      alert(
+        "Erro ao fazer login com Google. Verifique se o domínio está autorizado no Firebase."
+      );
     }
   };
 
@@ -376,11 +377,12 @@ export default function App() {
 
     try {
       const timestamp = serverTimestamp();
+      const patientName = user.displayName || user.email || "Paciente";
 
       await addDoc(
         collection(db, "artifacts", appId, "users", user.uid, "weekly_logs"),
         {
-          patientName: formData.name || user.displayName || "Paciente",
+          patientName: patientName,
           weight: parseFloat(formData.weight),
           height: parseFloat(formData.height),
           sleepScore: parseInt(formData.sleepScore),
@@ -393,7 +395,7 @@ export default function App() {
       await setDoc(
         doc(db, "artifacts", appId, "public", "data", "patients", user.uid),
         {
-          name: formData.name || user.displayName || "Paciente sem nome",
+          name: patientName,
           lastWeight: parseFloat(formData.weight),
           lastSleep: parseInt(formData.sleepScore),
           lastUpdate: timestamp,
@@ -449,7 +451,7 @@ export default function App() {
 
           <button
             onClick={handleGoogleLogin}
-            className="w-full py-4 bg-white border-2 border-slate-100 hover:border-blue-500 hover:bg-blue-50 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-3 transition-all"
+            className="w-full py-4 bg-white border-2 border-slate-100 hover:border-blue-500 hover:bg-blue-50 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -472,7 +474,7 @@ export default function App() {
             Entrar com Google
           </button>
           <p className="text-xs text-slate-400 mt-6">
-            Seus dados ficarão salvos na nuvem com segurança.
+            Acesso seguro e histórico salvo.
           </p>
         </div>
         <button
@@ -911,23 +913,16 @@ export default function App() {
               </div>
 
               <form onSubmit={handleSaveLog} className="p-6">
-                {logs.length === 0 && (
-                  <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
-                    <InputField
-                      label="Seu Nome Completo"
-                      value={formData.name}
-                      onChange={(v: any) =>
-                        setFormData({ ...formData, name: v })
-                      }
-                      icon={User}
-                      type="text"
-                      placeholder="Ex: João da Silva"
-                    />
-                    <p className="text-xs text-blue-600 mt-2">
-                      Usado para o Dr. Alberto te identificar.
-                    </p>
-                  </div>
-                )}
+                {/* CAMPO DE NOME REMOVIDO AQUI POIS É AUTOMÁTICO */}
+                <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-100 flex items-center gap-3">
+                  <User className="w-5 h-5 text-blue-600" />
+                  <p className="text-sm text-blue-800 font-medium">
+                    Registrando dados para:{" "}
+                    <span className="font-bold">
+                      {user.displayName || user.email}
+                    </span>
+                  </p>
+                </div>
 
                 <InputField
                   label="Peso Atual"
