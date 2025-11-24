@@ -36,7 +36,7 @@ import {
   FileText,
   Percent,
   ClipboardList,
-  RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import {
@@ -47,8 +47,6 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   signOut,
-  browserLocalPersistence,
-  setPersistence,
 } from "firebase/auth";
 import {
   getFirestore,
@@ -163,7 +161,7 @@ export default function App() {
 
   const [user, setUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [loginError, setLoginError] = useState("");
 
   const [mode, setMode] = useState("patient");
   const [view, setView] = useState("dashboard");
@@ -172,7 +170,7 @@ export default function App() {
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<any>(null);
 
-  // Dados do Paciente (Feedback + Metas)
+  // Dados do Paciente
   const [doctorNote, setDoctorNote] = useState("");
   const [medicalPlan, setMedicalPlan] = useState({
     diagnosis: "",
@@ -195,33 +193,44 @@ export default function App() {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  // 1. Monitorar Autenticação
+  // 1. Monitorar Autenticação (Blindado)
   useEffect(() => {
-    // Tenta recuperar resultado de redirecionamento (Login Mobile)
+    let isMounted = true;
+
+    // Verifica se está voltando de um redirecionamento
     getRedirectResult(auth)
       .then((result) => {
-        if (result) {
-          console.log("Login bem sucedido via Redirect");
+        if (result && isMounted) {
+          console.log("Login via Redirect Sucesso");
           setUser(result.user);
         }
       })
       .catch((error) => {
-        console.error("Erro no redirecionamento:", error);
-        // Se der erro no redirect, não faz nada, o usuário tenta de novo
+        console.error("Redirect Error:", error);
+        if (isMounted)
+          setLoginError(
+            "Falha ao recuperar login. Tente novamente no Chrome/Safari."
+          );
       });
 
+    // Escuta mudanças de estado
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setAuthLoading(false);
+      if (isMounted) {
+        setUser(currentUser);
+        setAuthLoading(false);
+      }
     });
-    return () => unsubscribe();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   // 2. Carregar dados (Logs)
   useEffect(() => {
     if (!user || mode === "doctor") return;
 
-    setLoading(true);
     const q = query(
       collection(db, "artifacts", appId, "users", user.uid, "weekly_logs"),
       orderBy("createdAt", "desc")
@@ -245,7 +254,6 @@ export default function App() {
           height: last.height || prev.height,
         }));
       }
-      setLoading(false);
     });
 
     const unsubPatient = onSnapshot(
@@ -253,13 +261,6 @@ export default function App() {
       (doc) => {
         if (doc.exists()) {
           setCurrentPatientData(doc.data());
-          const d = doc.data();
-          setMedicalPlan({
-            diagnosis: d.diagnosis || "",
-            targetWeight: d.targetWeight || "",
-            targetBodyFat: d.targetBodyFat || "",
-            otherGoals: d.otherGoals || "",
-          });
         }
       }
     );
@@ -299,8 +300,6 @@ export default function App() {
     )
       return;
 
-    setLoading(true);
-    // Logs
     const q = query(
       collection(
         db,
@@ -323,10 +322,8 @@ export default function App() {
         ).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
       }));
       setLogs(data);
-      setLoading(false);
     });
 
-    // Dados Públicos (Metas e Feedback)
     const unsubPatient = onSnapshot(
       doc(
         db,
@@ -370,40 +367,43 @@ export default function App() {
   // --- Ações ---
 
   const handleGoogleLogin = async () => {
+    setLoginError("");
     try {
-      // Força persistência local para evitar perder o login ao fechar aba
-      await setPersistence(auth, browserLocalPersistence);
+      // Detecta se é celular para usar o método mais compatível
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-      // Tenta Popup primeiro (melhor UX), se falhar (navegadores mobile in-app), usa Redirect
-      try {
+      // Força popup em desktop, redirect em mobile
+      if (isMobile) {
+        await signInWithRedirect(auth, googleProvider);
+      } else {
         await signInWithPopup(auth, googleProvider);
-      } catch (popupError: any) {
-        console.log(
-          "Popup bloqueado ou falhou, tentando Redirect...",
-          popupError
-        );
-        if (
-          popupError.code === "auth/popup-blocked" ||
-          popupError.code === "auth/cancelled-popup-request" ||
-          /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-        ) {
-          await signInWithRedirect(auth, googleProvider);
-        } else {
-          alert("Erro no login: " + popupError.message);
-        }
       }
-    } catch (error) {
-      console.error("Erro geral no login:", error);
-      alert("Erro ao iniciar login.");
+    } catch (error: any) {
+      console.error("Erro no login:", error);
+      // Fallback: se popup falhar, tenta redirect
+      if (
+        error.code === "auth/popup-blocked" ||
+        error.code === "auth/cancelled-popup-request"
+      ) {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+        } catch (err: any) {
+          setLoginError(
+            "Não foi possível logar. Se estiver no Instagram/WhatsApp, abra no Navegador."
+          );
+        }
+      } else {
+        setLoginError(error.message || "Erro ao iniciar login Google.");
+      }
     }
   };
 
   const handleLogout = () => {
-    signOut(auth);
-    setMode("patient");
-    setView("dashboard");
-    // Força recarregar a página para limpar qualquer estado preso
-    window.location.reload();
+    signOut(auth).then(() => {
+      setMode("patient");
+      setView("dashboard");
+      window.location.reload();
+    });
   };
 
   const handleDoctorLogin = () => {
@@ -513,6 +513,7 @@ export default function App() {
       </div>
     );
 
+  // TELA DE LOGIN (Se não estiver logado)
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
@@ -530,6 +531,14 @@ export default function App() {
             <span className="text-lg font-bold">G</span>
             Entrar com Google
           </button>
+
+          {loginError && (
+            <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-100 flex items-start gap-2 text-left">
+              <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-red-800">{loginError}</p>
+            </div>
+          )}
+
           <p className="text-xs text-slate-400 mt-6">
             Entre em 1 clique e acompanhe sua evolução
           </p>
