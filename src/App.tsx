@@ -193,16 +193,14 @@ export default function App() {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  // 1. Monitorar Autenticação (Correção do Grok aplicada)
+  // 1. Monitorar Autenticação
   useEffect(() => {
     let isMounted = true;
 
-    // Tenta recuperar resultado de redirecionamento (Login Mobile)
     getRedirectResult(auth)
       .then((result) => {
         if (result && isMounted) {
-          console.log("Login via Redirect Sucesso");
-          // O onAuthStateChanged vai cuidar de setar o user
+          // Sucesso no redirect
         }
       })
       .catch((error) => {
@@ -213,7 +211,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (isMounted) {
         setUser(currentUser);
-        setAuthLoading(false); // Só para de carregar quando o Firebase responde
+        setAuthLoading(false);
       }
     });
 
@@ -305,6 +303,7 @@ export default function App() {
     )
       return;
 
+    setLoading(true);
     const q = query(
       collection(
         db,
@@ -327,6 +326,7 @@ export default function App() {
         ).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
       }));
       setLogs(data);
+      setLoading(false);
     });
 
     const unsubPatient = onSnapshot(
@@ -373,12 +373,10 @@ export default function App() {
 
   const handleGoogleLogin = async () => {
     setLoginError("");
-    setAuthLoading(true); // Mostra loading durante o clique
+    setAuthLoading(true);
     try {
-      // Detecta se é celular para usar o método mais compatível
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-      // Força popup em desktop, redirect em mobile (melhor para evitar bloqueio de popup)
       if (isMobile) {
         await signInWithRedirect(auth, googleProvider);
       } else {
@@ -386,7 +384,6 @@ export default function App() {
       }
     } catch (error: any) {
       console.error("Erro no login:", error);
-      // Fallback: se popup falhar, tenta redirect
       if (
         error.code === "auth/popup-blocked" ||
         error.code === "auth/cancelled-popup-request"
@@ -411,7 +408,6 @@ export default function App() {
       await signOut(auth);
       setMode("patient");
       setView("dashboard");
-      // Sem reload forçado, deixa o onAuthStateChanged atualizar a tela
     } catch (error) {
       console.error("Erro ao sair", error);
     }
@@ -517,7 +513,6 @@ export default function App() {
 
   // --- Interface ---
 
-  // Enquanto verifica o login, mostra APENAS o spinner. Isso evita o "loop".
   if (authLoading)
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -539,7 +534,7 @@ export default function App() {
             onClick={handleGoogleLogin}
             className="w-full py-4 bg-white border-2 border-slate-100 hover:border-blue-500 hover:bg-blue-50 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm group"
           >
-            {/* Ícone do Google Original Restaurado (SVG) */}
+            {/* Ícone do Google */}
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -571,15 +566,6 @@ export default function App() {
           <p className="text-xs text-slate-400 mt-6">
             Entre em 1 clique e acompanhe sua evolução
           </p>
-
-          <div className="mt-8 p-3 bg-blue-50 rounded-lg border border-blue-100 text-left">
-            <p className="text-[10px] text-blue-800 font-medium leading-tight">
-              ⚠️ <strong>Está no Instagram/WhatsApp?</strong>
-              <br />
-              Se o botão não funcionar, clique nos 3 pontinhos no canto da tela
-              e escolha <strong>"Abrir no Navegador"</strong>.
-            </p>
-          </div>
         </div>
         <button
           onClick={handleDoctorLogin}
