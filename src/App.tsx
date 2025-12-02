@@ -42,6 +42,8 @@ import { initializeApp } from "firebase/app";
 import {
   getAuth,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
   signOut,
@@ -158,11 +160,12 @@ export default function App() {
   }, []);
 
   const [user, setUser] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true); // Começa carregando
   const [loginError, setLoginError] = useState("");
 
   const [mode, setMode] = useState("patient");
   const [view, setView] = useState("dashboard");
+  const [loading, setLoading] = useState(false);
 
   const [logs, setLogs] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
@@ -190,20 +193,41 @@ export default function App() {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  // 1. Monitorar Autenticação (Simplificado e Robusto)
+  // 1. Monitorar Autenticação (Correção do Grok aplicada)
   useEffect(() => {
-    // O Firebase gerencia a sessão automaticamente. Não precisamos forçar persistência manual.
+    let isMounted = true;
+
+    // Tenta recuperar resultado de redirecionamento (Login Mobile)
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result && isMounted) {
+          console.log("Login via Redirect Sucesso");
+          // O onAuthStateChanged vai cuidar de setar o user
+        }
+      })
+      .catch((error) => {
+        console.error("Redirect Error:", error);
+        if (isMounted) setLoginError("Falha no login móvel. Tente novamente.");
+      });
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setAuthLoading(false);
+      if (isMounted) {
+        setUser(currentUser);
+        setAuthLoading(false); // Só para de carregar quando o Firebase responde
+      }
     });
-    return () => unsubscribe();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   // 2. Carregar dados
   useEffect(() => {
     if (!user || mode === "doctor") return;
 
+    setLoading(true);
     const q = query(
       collection(db, "artifacts", appId, "users", user.uid, "weekly_logs"),
       orderBy("createdAt", "desc")
@@ -227,6 +251,7 @@ export default function App() {
           height: last.height || prev.height,
         }));
       }
+      setLoading(false);
     });
 
     const unsubPatient = onSnapshot(
@@ -234,6 +259,13 @@ export default function App() {
       (doc) => {
         if (doc.exists()) {
           setCurrentPatientData(doc.data());
+          const d = doc.data();
+          setMedicalPlan({
+            diagnosis: d.diagnosis || "",
+            targetWeight: d.targetWeight || "",
+            targetBodyFat: d.targetBodyFat || "",
+            otherGoals: d.otherGoals || "",
+          });
         }
       }
     );
@@ -341,25 +373,48 @@ export default function App() {
 
   const handleGoogleLogin = async () => {
     setLoginError("");
+    setAuthLoading(true); // Mostra loading durante o clique
     try {
-      // Usar signInWithPopup é o método mais compatível e simples para Web Apps modernos
-      await signInWithPopup(auth, googleProvider);
+      // Detecta se é celular para usar o método mais compatível
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      // Força popup em desktop, redirect em mobile (melhor para evitar bloqueio de popup)
+      if (isMobile) {
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        await signInWithPopup(auth, googleProvider);
+      }
     } catch (error: any) {
       console.error("Erro no login:", error);
-      setLoginError(
-        "Erro ao logar: " +
-          error.message +
-          ". Se estiver no Instagram/WhatsApp, tente abrir no Chrome/Safari."
-      );
+      // Fallback: se popup falhar, tenta redirect
+      if (
+        error.code === "auth/popup-blocked" ||
+        error.code === "auth/cancelled-popup-request"
+      ) {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+        } catch (err: any) {
+          setAuthLoading(false);
+          setLoginError(
+            "Não foi possível logar. Se estiver no Instagram/WhatsApp, abra no Navegador."
+          );
+        }
+      } else {
+        setAuthLoading(false);
+        setLoginError(error.message || "Erro ao iniciar login Google.");
+      }
     }
   };
 
-  const handleLogout = () => {
-    signOut(auth).then(() => {
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
       setMode("patient");
       setView("dashboard");
-      window.location.reload();
-    });
+      // Sem reload forçado, deixa o onAuthStateChanged atualizar a tela
+    } catch (error) {
+      console.error("Erro ao sair", error);
+    }
   };
 
   const handleDoctorLogin = () => {
@@ -462,6 +517,7 @@ export default function App() {
 
   // --- Interface ---
 
+  // Enquanto verifica o login, mostra APENAS o spinner. Isso evita o "loop".
   if (authLoading)
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -483,7 +539,7 @@ export default function App() {
             onClick={handleGoogleLogin}
             className="w-full py-4 bg-white border-2 border-slate-100 hover:border-blue-500 hover:bg-blue-50 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm group"
           >
-            {/* Ícone do Google Original Restaurado */}
+            {/* Ícone do Google Original Restaurado (SVG) */}
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
