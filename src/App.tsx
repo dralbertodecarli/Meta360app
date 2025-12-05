@@ -43,12 +43,9 @@ import {
   getAuth,
   signInWithPopup,
   signInWithRedirect,
-  getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
   signOut,
-  setPersistence,
-  browserLocalPersistence,
 } from "firebase/auth";
 import {
   getFirestore,
@@ -155,7 +152,6 @@ const InputField = ({
 // --- O Cérebro do Aplicativo ---
 
 export default function App() {
-  // Tinta (Tailwind)
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://cdn.tailwindcss.com";
@@ -196,38 +192,15 @@ export default function App() {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  // 1. Monitorar Autenticação (CORRIGIDO V12)
+  // 1. Monitorar Autenticação (Simplificado e Seguro)
   useEffect(() => {
-    let isMounted = true;
-
-    const checkRedirectResult = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result?.user && isMounted) {
-          console.log("Login via Redirect recuperado com sucesso");
-          setUser(result.user);
-          // Não setamos authLoading false aqui, deixamos o onAuthStateChanged confirmar
-        }
-      } catch (error) {
-        console.error("Erro no redirect:", error);
-        if (isMounted)
-          setLoginError("Falha ao retornar do login. Tente novamente.");
-      }
-    };
-
-    checkRedirectResult();
-
+    // O Firebase já gerencia a persistência automaticamente.
+    // Apenas ouvimos a mudança de estado.
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (isMounted) {
-        setUser(currentUser);
-        setAuthLoading(false); // Só libera a tela quando o Firebase tiver certeza
-      }
+      setUser(currentUser);
+      setAuthLoading(false); // Só destravamos a tela quando o Firebase responder
     });
-
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   // 2. Carregar dados
@@ -382,39 +355,24 @@ export default function App() {
 
   const handleGoogleLogin = async () => {
     setLoginError("");
-    setAuthLoading(true); // Trava a tela com spinner para evitar cliques duplos
+    setAuthLoading(true);
     try {
-      // 1. Força a persistência para não perder o login ao fechar o navegador
-      await setPersistence(auth, browserLocalPersistence);
-
-      // 2. Tenta detectar ambiente Mobile
+      // Detecta Mobile vs Desktop para escolher o melhor método
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
       if (isMobile) {
+        // Mobile: Redirecionamento (melhor para Instagram/WhatsApp)
         await signInWithRedirect(auth, googleProvider);
       } else {
+        // Desktop: Popup
         await signInWithPopup(auth, googleProvider);
       }
     } catch (error: any) {
       console.error("Erro no login:", error);
-
-      // Fallback de segurança
-      if (
-        error.code === "auth/popup-blocked" ||
-        error.code === "auth/cancelled-popup-request"
-      ) {
-        try {
-          await signInWithRedirect(auth, googleProvider);
-        } catch (err: any) {
-          setAuthLoading(false);
-          setLoginError(
-            "Login bloqueado. Por favor, abra o link diretamente no Chrome ou Safari."
-          );
-        }
-      } else {
-        setAuthLoading(false);
-        setLoginError(error.message || "Erro ao iniciar login.");
-      }
+      setAuthLoading(false);
+      setLoginError(
+        "Erro ao iniciar login. Se estiver no Instagram, abra no navegador do celular."
+      );
     }
   };
 
@@ -550,7 +508,7 @@ export default function App() {
             onClick={handleGoogleLogin}
             className="w-full py-4 bg-white border-2 border-slate-100 hover:border-blue-500 hover:bg-blue-50 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm group"
           >
-            {/* Ícone do Google Original (SVG) */}
+            {/* Ícone do Google Original COLORIDO */}
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -582,15 +540,6 @@ export default function App() {
           <p className="text-xs text-slate-400 mt-6">
             Entre em 1 clique e acompanhe sua evolução
           </p>
-
-          <div className="mt-8 p-3 bg-blue-50 rounded-lg border border-blue-100 text-left">
-            <p className="text-[10px] text-blue-800 font-medium leading-tight">
-              ⚠️ <strong>Está no Instagram/WhatsApp?</strong>
-              <br />
-              Se o botão não funcionar, clique nos 3 pontinhos no canto da tela
-              e escolha <strong>"Abrir no Navegador"</strong>.
-            </p>
-          </div>
         </div>
         <button
           onClick={handleDoctorLogin}
@@ -698,7 +647,7 @@ export default function App() {
                           {p.name || "Paciente sem nome"}
                         </h3>
                         <p className="text-xs text-slate-500">
-                          Último registro: {p.lastUpdateFormatted}
+                          Último: {p.lastUpdateFormatted}
                         </p>
                       </div>
                     </div>
