@@ -78,8 +78,7 @@ const appId = "meta-360-clinica";
 
 // SENHAS
 const DOCTOR_PASSWORD = "meta";
-const PATIENT_FIXED_PASSWORD = "sucesso"; // Senha nova
-const OLD_PASSWORD = "sucesso*"; // Senha antiga (para recuperação)
+const PATIENT_FIXED_PASSWORD = "sucesso"; // Senha Oficial
 
 // --- Componentes Visuais ---
 
@@ -360,7 +359,7 @@ export default function App() {
     setAuthLoading(true);
     setAuthError("");
 
-    // Validação local
+    // Validação da senha fixa local
     if (password !== PATIENT_FIXED_PASSWORD) {
       setAuthError("Senha incorreta.");
       setAuthLoading(false);
@@ -371,34 +370,39 @@ export default function App() {
       // 1. Tenta logar normal
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
-      // 2. Se falhar, verifica o motivo
+      // 2. Erro: Usuário não existe? -> CRIAR
       if (
         error.code === "auth/user-not-found" ||
         error.code === "auth/invalid-credential"
       ) {
-        // Usuário não existe? Cria.
         try {
           await createUserWithEmailAndPassword(auth, email, password);
         } catch (createError: any) {
+          console.error("Erro criação:", createError);
           if (createError.code === "auth/email-already-in-use") {
-            setAuthError("Erro: E-mail já em uso com outro método.");
+            // CASO CRÍTICO: Usou Google antes e agora tenta senha
+            setAuthError(
+              "Este email já foi usado com Google/outro método. Fale com o suporte para resetar."
+            );
           } else {
-            setAuthError("Erro ao criar conta.");
+            setAuthError("Erro ao criar conta: " + createError.message);
           }
           setAuthLoading(false);
         }
-      } else if (error.code === "auth/wrong-password") {
-        // Senha errada? Tenta a senha ANTIGA (sucesso*)
-        // Isso corrige o problema dos usuários da versão anterior!
+      }
+      // 3. Erro: Senha errada? -> Tentar migração (sucesso*)
+      else if (error.code === "auth/wrong-password") {
         try {
+          // Tenta a senha antiga
           const userCred = await signInWithEmailAndPassword(
             auth,
             email,
-            OLD_PASSWORD
+            "sucesso*"
           );
-          // Atualiza para a nova senha automaticamente
+          // Se entrou, atualiza para a nova
           await updatePassword(userCred.user, PATIENT_FIXED_PASSWORD);
         } catch (oldPassError) {
+          // Se falhar também a antiga, então está errada mesmo
           setAuthError("Não foi possível acessar. Verifique seu e-mail.");
           setAuthLoading(false);
         }
@@ -456,7 +460,9 @@ export default function App() {
       alert("Planejamento salvo com sucesso!");
     } catch (error) {
       console.error(error);
-      alert("Erro ao salvar.");
+      alert(
+        "Erro ao salvar. Verifique se as Regras do Firestore estão liberadas."
+      );
     }
   };
 
@@ -504,7 +510,7 @@ export default function App() {
       setView("dashboard");
     } catch (error) {
       console.error("Error adding document: ", error);
-      alert("Erro ao salvar.");
+      alert("Erro ao salvar. Verifique as regras do Firebase.");
     } finally {
       setSubmitting(false);
     }
@@ -564,7 +570,7 @@ export default function App() {
                   type="password"
                   required
                   className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  placeholder="Sua senha"
+                  placeholder="********"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
