@@ -45,6 +45,7 @@ import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
   signOut,
+  updatePassword,
 } from "firebase/auth";
 import {
   getFirestore,
@@ -77,7 +78,8 @@ const appId = "meta-360-clinica";
 
 // SENHAS
 const DOCTOR_PASSWORD = "meta";
-const PATIENT_FIXED_PASSWORD = "sucesso"; // Senha alterada para 'sucesso'
+const PATIENT_FIXED_PASSWORD = "sucesso"; // Senha nova
+const OLD_PASSWORD = "sucesso*"; // Senha antiga (para recuperação)
 
 // --- Componentes Visuais ---
 
@@ -358,7 +360,7 @@ export default function App() {
     setAuthLoading(true);
     setAuthError("");
 
-    // REGRA DE OURO: A senha TEM que ser 'sucesso'
+    // Validação local
     if (password !== PATIENT_FIXED_PASSWORD) {
       setAuthError("Senha incorreta.");
       setAuthLoading(false);
@@ -366,29 +368,42 @@ export default function App() {
     }
 
     try {
-      // 1. Tenta LOGAR primeiro
+      // 1. Tenta logar normal
       await signInWithEmailAndPassword(auth, email, password);
-    } catch (loginError: any) {
-      // 2. Se o usuário não existe, CRIA a conta automaticamente com a mesma senha
+    } catch (error: any) {
+      // 2. Se falhar, verifica o motivo
       if (
-        loginError.code === "auth/user-not-found" ||
-        loginError.code === "auth/invalid-credential"
+        error.code === "auth/user-not-found" ||
+        error.code === "auth/invalid-credential"
       ) {
+        // Usuário não existe? Cria.
         try {
           await createUserWithEmailAndPassword(auth, email, password);
-          // Se criar com sucesso, o onAuthStateChanged vai logar automaticamente
         } catch (createError: any) {
-          console.error("Erro ao criar:", createError);
           if (createError.code === "auth/email-already-in-use") {
-            setAuthError("Este e-mail já existe.");
+            setAuthError("Erro: E-mail já em uso com outro método.");
           } else {
-            setAuthError("Erro ao criar conta: " + createError.message);
+            setAuthError("Erro ao criar conta.");
           }
           setAuthLoading(false);
         }
+      } else if (error.code === "auth/wrong-password") {
+        // Senha errada? Tenta a senha ANTIGA (sucesso*)
+        // Isso corrige o problema dos usuários da versão anterior!
+        try {
+          const userCred = await signInWithEmailAndPassword(
+            auth,
+            email,
+            OLD_PASSWORD
+          );
+          // Atualiza para a nova senha automaticamente
+          await updatePassword(userCred.user, PATIENT_FIXED_PASSWORD);
+        } catch (oldPassError) {
+          setAuthError("Não foi possível acessar. Verifique seu e-mail.");
+          setAuthLoading(false);
+        }
       } else {
-        console.error("Erro Login:", loginError);
-        setAuthError("Erro ao entrar. Verifique seu e-mail.");
+        setAuthError("Erro: " + error.message);
         setAuthLoading(false);
       }
     }
