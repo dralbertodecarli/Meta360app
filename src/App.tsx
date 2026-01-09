@@ -37,6 +37,7 @@ import {
   AlertCircle,
   Mail,
   Key,
+  Footprints,
 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import {
@@ -78,40 +79,48 @@ const appId = "meta-360-clinica";
 
 // SENHAS
 const DOCTOR_PASSWORD = "meta";
-const PATIENT_FIXED_PASSWORD = "sucesso"; // Senha Oficial
+const PATIENT_FIXED_PASSWORD = "sucesso";
 
 // --- Componentes Visuais ---
 
-const MetricCard = ({ title, value, unit, icon: Icon, color, trend }: any) => (
-  <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-shadow">
-    <div>
-      <p className="text-slate-500 text-xs md:text-sm font-medium mb-1">
-        {title}
-      </p>
-      <h3 className="text-xl md:text-2xl font-bold text-slate-800">
-        {value}{" "}
-        <span className="text-xs md:text-sm text-slate-400 font-normal">
-          {unit}
-        </span>
-      </h3>
-      {trend !== null && trend !== undefined && (
-        <p
-          className={`text-xs mt-1 font-medium ${
-            trend > 0
-              ? "text-emerald-500"
-              : trend < 0
-              ? "text-emerald-500"
-              : "text-slate-400"
-          }`}
-        >
-          {trend > 0 ? "+" : ""}
-          {trend} vs anterior
+const MetricCard = ({
+  title,
+  value,
+  unit,
+  icon: Icon,
+  color,
+  onClick,
+  isSelected,
+}: any) => (
+  <div
+    onClick={onClick}
+    className={`p-4 md:p-6 rounded-2xl shadow-sm border cursor-pointer transition-all transform hover:scale-[1.02] ${
+      isSelected
+        ? "bg-slate-50 border-blue-400 ring-2 ring-blue-100"
+        : "bg-white border-slate-100 hover:shadow-md"
+    }`}
+  >
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-slate-500 text-xs md:text-sm font-medium mb-1">
+          {title}
         </p>
-      )}
+        <h3 className="text-xl md:text-2xl font-bold text-slate-800">
+          {value || "-"}{" "}
+          <span className="text-xs md:text-sm text-slate-400 font-normal">
+            {unit}
+          </span>
+        </h3>
+      </div>
+      <div className={`p-3 rounded-xl bg-opacity-10 ${color.bg}`}>
+        <Icon className={`w-5 h-5 md:w-6 md:h-6 ${color.text}`} />
+      </div>
     </div>
-    <div className={`p-3 rounded-xl bg-opacity-10 ${color.bg}`}>
-      <Icon className={`w-5 h-5 md:w-6 md:h-6 ${color.text}`} />
-    </div>
+    {isSelected && (
+      <div className="mt-2 text-[10px] text-blue-500 font-semibold uppercase tracking-wider">
+        Visualizando no Gráfico
+      </div>
+    )}
   </div>
 );
 
@@ -160,7 +169,7 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // Estados para Login por Email
+  // Estados para Login
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
@@ -184,7 +193,6 @@ export default function App() {
 
   const [selectedMetric, setSelectedMetric] = useState("weight");
   const [aiAnalysis, setAiAnalysis] = useState("");
-  const [analyzing, setAnalyzing] = useState(false);
 
   const [formData, setFormData] = useState({
     weight: "",
@@ -192,6 +200,7 @@ export default function App() {
     sleepScore: "",
     workoutMinutes: "",
     waist: "",
+    steps: "", // Novo campo para passos
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -359,7 +368,6 @@ export default function App() {
     setAuthLoading(true);
     setAuthError("");
 
-    // Validação local
     if (password !== PATIENT_FIXED_PASSWORD) {
       setAuthError("Senha incorreta.");
       setAuthLoading(false);
@@ -367,10 +375,8 @@ export default function App() {
     }
 
     try {
-      // 1. Tenta logar normal
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
-      // 2. Erro: Usuário não existe? -> CRIAR
       if (
         error.code === "auth/user-not-found" ||
         error.code === "auth/invalid-credential"
@@ -378,31 +384,23 @@ export default function App() {
         try {
           await createUserWithEmailAndPassword(auth, email, password);
         } catch (createError: any) {
-          console.error("Erro criação:", createError);
           if (createError.code === "auth/email-already-in-use") {
-            // CASO CRÍTICO: Usou Google antes e agora tenta senha
-            setAuthError(
-              "Este email já foi usado com Google/outro método. Fale com o suporte para resetar."
-            );
+            setAuthError("Este e-mail já existe.");
           } else {
             setAuthError("Erro ao criar conta: " + createError.message);
           }
           setAuthLoading(false);
         }
-      }
-      // 3. Erro: Senha errada? -> Tentar migração (sucesso*)
-      else if (error.code === "auth/wrong-password") {
+      } else if (error.code === "auth/wrong-password") {
         try {
-          // Tenta a senha antiga
+          // Tenta senha antiga e migra
           const userCred = await signInWithEmailAndPassword(
             auth,
             email,
             "sucesso*"
           );
-          // Se entrou, atualiza para a nova senha automaticamente
           await updatePassword(userCred.user, PATIENT_FIXED_PASSWORD);
         } catch (oldPassError) {
-          // Se falhar também a antiga, então está errada mesmo
           setAuthError("Não foi possível acessar. Verifique seu e-mail.");
           setAuthLoading(false);
         }
@@ -460,9 +458,7 @@ export default function App() {
       alert("Planejamento salvo com sucesso!");
     } catch (error) {
       console.error(error);
-      alert(
-        "Erro ao salvar. Verifique se as Regras do Firestore estão liberadas."
-      );
+      alert("Erro ao salvar.");
     }
   };
 
@@ -484,6 +480,7 @@ export default function App() {
           sleepScore: parseInt(formData.sleepScore),
           workoutMinutes: parseInt(formData.workoutMinutes),
           waist: parseFloat(formData.waist),
+          steps: parseInt(formData.steps) || 0, // Salva os passos
           createdAt: timestamp,
         }
       );
@@ -494,6 +491,7 @@ export default function App() {
           name: patientName,
           lastWeight: parseFloat(formData.weight),
           lastSleep: parseInt(formData.sleepScore),
+          lastSteps: parseInt(formData.steps) || 0, // Atualiza resumo público
           lastUpdate: timestamp,
           height: parseFloat(formData.height),
         },
@@ -506,11 +504,12 @@ export default function App() {
         sleepScore: "",
         workoutMinutes: "",
         waist: "",
+        steps: "",
       }));
       setView("dashboard");
     } catch (error) {
       console.error("Error adding document: ", error);
-      alert("Erro ao salvar. Verifique as regras do Firebase.");
+      alert("Erro ao salvar.");
     } finally {
       setSubmitting(false);
     }
@@ -717,9 +716,9 @@ export default function App() {
                       </p>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-2">
-                      <p className="text-slate-400 text-xs">Sono</p>
+                      <p className="text-slate-400 text-xs">Passos</p>
                       <p className="font-semibold text-slate-700">
-                        {p.lastSleep || "-"}
+                        {p.lastSteps || "-"}
                       </p>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-2">
@@ -971,8 +970,8 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Cartões de Métricas e Gráficos (Mantidos igual) */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Cartões de Métricas (CLICÁVEIS) */}
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                   <MetricCard
                     title="Peso"
                     value={latestLog.weight}
@@ -980,6 +979,8 @@ export default function App() {
                     icon={Scale}
                     color={{ bg: "bg-blue-500", text: "text-blue-600" }}
                     trend={null}
+                    onClick={() => setSelectedMetric("weight")}
+                    isSelected={selectedMetric === "weight"}
                   />
                   <MetricCard
                     title="Cintura"
@@ -988,6 +989,8 @@ export default function App() {
                     icon={Ruler}
                     color={{ bg: "bg-purple-500", text: "text-purple-600" }}
                     trend={null}
+                    onClick={() => setSelectedMetric("waist")}
+                    isSelected={selectedMetric === "waist"}
                   />
                   <MetricCard
                     title="Sono"
@@ -995,6 +998,8 @@ export default function App() {
                     unit="/100"
                     icon={Moon}
                     color={{ bg: "bg-indigo-500", text: "text-indigo-600" }}
+                    onClick={() => setSelectedMetric("sleepScore")}
+                    isSelected={selectedMetric === "sleepScore"}
                   />
                   <MetricCard
                     title="Treino"
@@ -1002,13 +1007,38 @@ export default function App() {
                     unit="min"
                     icon={Activity}
                     color={{ bg: "bg-emerald-500", text: "text-emerald-600" }}
+                    onClick={() => setSelectedMetric("workoutMinutes")}
+                    isSelected={selectedMetric === "workoutMinutes"}
+                  />
+                  {/* NOVO CARTÃO DE PASSOS */}
+                  <MetricCard
+                    title="Passos"
+                    value={latestLog.steps}
+                    unit="p/dia"
+                    icon={Footprints}
+                    color={{ bg: "bg-orange-500", text: "text-orange-600" }}
+                    onClick={() => setSelectedMetric("steps")}
+                    isSelected={selectedMetric === "steps"}
                   />
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                  <h3 className="text-lg font-bold text-slate-800 mb-4">
-                    Evolução
-                  </h3>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-slate-800">
+                      Evolução (
+                      {selectedMetric === "weight"
+                        ? "Peso"
+                        : selectedMetric === "waist"
+                        ? "Cintura"
+                        : selectedMetric === "sleepScore"
+                        ? "Sono"
+                        : selectedMetric === "workoutMinutes"
+                        ? "Treino"
+                        : "Passos"}
+                      )
+                    </h3>
+                  </div>
+
                   <div className="h-[300px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart
@@ -1141,16 +1171,31 @@ export default function App() {
                     suffix="pts"
                   />
                 </div>
-                <InputField
-                  label="Minutos de Treino (Semana)"
-                  value={formData.workoutMinutes}
-                  onChange={(v: any) =>
-                    setFormData({ ...formData, workoutMinutes: v })
-                  }
-                  icon={Activity}
-                  placeholder="Ex: 150"
-                  suffix="min"
-                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <InputField
+                    label="Minutos de Treino (Semana)"
+                    value={formData.workoutMinutes}
+                    onChange={(v: any) =>
+                      setFormData({ ...formData, workoutMinutes: v })
+                    }
+                    icon={Activity}
+                    placeholder="Ex: 150"
+                    suffix="min"
+                  />
+                  {/* NOVO CAMPO DE PASSOS */}
+                  <InputField
+                    label="Média Passos/Dia"
+                    value={formData.steps}
+                    onChange={(v: any) =>
+                      setFormData({ ...formData, steps: v })
+                    }
+                    icon={Footprints}
+                    placeholder="Ex: 8000"
+                    suffix="passos"
+                  />
+                </div>
+
                 <button
                   type="submit"
                   disabled={submitting}
@@ -1169,6 +1214,65 @@ export default function App() {
                   )}
                 </button>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* --- VIEW: HISTÓRICO COMPLETO --- */}
+        {mode === "patient" && view === "history" && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <h2 className="font-bold text-slate-800 flex items-center gap-2">
+                <History className="w-5 h-5 text-blue-600" />
+                Histórico Completo
+              </h2>
+              <button
+                onClick={() => setView("dashboard")}
+                className="text-sm text-slate-500"
+              >
+                Voltar
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
+                  <tr>
+                    <th className="px-6 py-3">Data</th>
+                    <th className="px-6 py-3">Peso</th>
+                    <th className="px-6 py-3">Cintura</th>
+                    <th className="px-6 py-3">Sono</th>
+                    <th className="px-6 py-3">Treino</th>
+                    <th className="px-6 py-3">Passos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((log) => (
+                    <tr
+                      key={log.id}
+                      className="bg-white border-b border-slate-50 hover:bg-slate-50"
+                    >
+                      <td className="px-6 py-4 font-medium text-slate-900">
+                        {log.dateFormatted}
+                      </td>
+                      <td className="px-6 py-4">{log.weight} kg</td>
+                      <td className="px-6 py-4">{log.waist} cm</td>
+                      <td className="px-6 py-4">{log.sleepScore}</td>
+                      <td className="px-6 py-4">{log.workoutMinutes} min</td>
+                      <td className="px-6 py-4">{log.steps || "-"}</td>
+                    </tr>
+                  ))}
+                  {logs.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="px-6 py-8 text-center text-slate-400"
+                      >
+                        Nenhum registro encontrado.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
